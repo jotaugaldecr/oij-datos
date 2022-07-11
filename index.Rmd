@@ -1,0 +1,120 @@
+---
+title: "Datos policiales OIJ"
+output: 
+  flexdashboard::flex_dashboard:
+    theme: readable
+    orientation: rows
+    
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+```
+
+
+```{r paquetes}
+# Carga de paquetes
+library(dplyr)
+library(sf)
+library(leaflet)
+library(DT)
+library(ggplot2)
+library(plotly)
+```
+
+
+```{r lectura-datos}
+# Lectura de datos
+cantones <-
+  st_read(dsn = "C:/Users/PC/Documents/2022 UCR I/PROCESAMIENTO DE DATOS/Datos Policiales/oij-datos/cantones_simplificados.geojson", quiet = TRUE) %>%
+  st_transform(4326)
+
+
+datos_policia <-
+  readxl::read_excel("C:/Users/PC/Documents/2022 UCR I/PROCESAMIENTO DE DATOS/Datos Policiales/oij-datos/estadisticaspoliciales2021.xls")
+
+```
+
+
+# Generales
+
+
+Row {data-height=60}
+-----------------------------------------------------------------------
+
+### **Fuente de los datos: [Organismo de Investigación Policial (OIJ)](https://sitiooij.poder-judicial.go.cr/)**
+
+
+Row {data-height=850}
+-----------------------------------------------------------------------
+
+### Mapa
+
+
+```{r mapa}
+# Mapa
+leaflet() %>%
+  setView(lng = -84.19452,
+          lat = 9.572735,
+          zoom = 7) %>%
+  addTiles(group = "OpenStreetMap") %>%
+  addPolygons(
+    data = cantones,
+    color = "black",
+    opacity = 0.2,
+    weight = 1.5,
+    popup = paste(
+      paste("<a>Cantón:</a>", cantones$canton),
+      paste("<a>Área:</a>", cantones$area, "km2"),
+      sep = "<br>"
+    ),
+    group = "Cantones"
+  ) %>%
+  addLayersControl(baseGroups = c("OpenStreetMap"),
+                   overlayGroups = c("Cantones"))
+```
+
+
+
+
+### Tabla {data-width=500}
+
+```{r tabla, message=FALSE, echo=FALSE,warning=FALSE}
+
+datos_policia %>%
+  dplyr::select(Delito, Fecha, Victima, Edad, Genero, Provincia, Canton) %>%
+  mutate(Fecha = as.Date(Fecha, format = "%d/%m/%Y")) %>%
+  datatable(
+    options = list (
+      pageLength = 10,
+      language = list(url = '//cdn.datatables.net/plug-ins/1.10.11/i18n/Spanish.json')
+    ),
+    colnames = c(
+      "Delito",
+      "Fecha",
+      "Víctima",
+      "Edad",
+      "Género",
+      "Provincia",
+      "Cantón"
+    )
+  )
+```
+
+
+# Graficos {data-orientation=columns}
+
+Column {data-width=600}
+-----------------------------------------------------------------------
+
+### Grafico 1
+
+### Grafico 2
+
+Column {data-width=400}
+-----------------------------------------------------------------------
+
+### Grafico 3
+
+### Grafico 4
+
