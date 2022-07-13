@@ -7,12 +7,12 @@ output:
     
 ---
 
-```{r setup, include=FALSE}
+```{r setup, include=FALSE, message=FALSE, warning=FALSE}
 library(flexdashboard)
 ```
 
 
-```{r paquetes}
+```{r paquetes, message=FALSE, warning=FALSE}
 # Carga de paquetes
 library(dplyr)
 library(sf)
@@ -21,10 +21,16 @@ library(DT)
 library(ggplot2)
 library(plotly)
 library(lubridate)
+library(stringi)
+library(readr)
+library(leafem)
+library(leaflet.extras)
+
+
 ```
 
 
-```{r lectura-datos}
+```{r lectura-datos, message=FALSE, warning=FALSE}
 # Lectura de datos
 cantones <-
   st_read(dsn = "C:/Users/PC/Documents/2022 UCR I/PROCESAMIENTO DE DATOS/Datos Policiales/oij-datos/cantones_simplificados.geojson", quiet = TRUE) %>%
@@ -34,7 +40,127 @@ cantones <-
 datos_policia <-
   readxl::read_excel("C:/Users/PC/Documents/2022 UCR I/PROCESAMIENTO DE DATOS/Datos Policiales/oij-datos/estadisticaspoliciales2021.xls")
 
+
+
 ```
+
+
+
+
+
+
+
+
+```{r normalizacion, message=FALSE, warning=FALSE}
+
+cantones <-
+  cantones %>%
+  mutate(canton_normalizado = tolower(stri_trans_general(canton, id = "Latin-ASCII")))
+
+
+datos_policia <-
+  datos_policia %>%
+  mutate(canton_normalizado = tolower(stri_trans_general(Canton, id = "Latin-ASCII")))
+
+
+```
+
+
+```{r obt-nombres, message=FALSE, warning=FALSE}
+datos_policia %>%
+  left_join(
+    dplyr::select(st_drop_geometry(cantones),
+                  canton_normalizado, cod_canton),
+    by = "canton_normalizado",
+    copy = FALSE,
+    keep = FALSE
+  ) %>%
+  filter(is.na(cod_canton) & canton_normalizado != "desconocido") %>% # los cod_canton = NA son los que no están en el data frame de cantones
+  distinct(canton_normalizado) # se despliegan solo los nombres de cantones diferentes
+
+```
+
+
+
+
+
+
+
+
+
+```{r correccion de nombres, message=FALSE, warning=FALSE}
+datos_policia <-
+  datos_policia %>%
+  mutate(Canton = if_else(Canton == "LEON CORTES", "LEON CORTES CASTRO", Canton)) %>%
+  mutate(Canton = if_else(Canton == "VASQUEZ DE CORONADO", "VAZQUEZ DE CORONADO", Canton))
+
+datos_policia <-
+  datos_policia %>%
+  mutate(canton_normalizado = tolower(stri_trans_general(Canton, id = "Latin-ASCII")))
+
+```
+
+
+
+```{r revision, message=FALSE, warning=FALSE}
+
+datos_policia %>%
+  left_join(
+    dplyr::select(st_drop_geometry(cantones),
+                  canton_normalizado, cod_canton),
+    by = "canton_normalizado",
+    copy = FALSE,
+    keep = FALSE
+  ) %>%
+  filter(is.na(cod_canton) & canton_normalizado != "desconocido") %>% # los cod_canton = NA son los que no están en el data frame de cantones
+  distinct(canton_normalizado) 
+
+```
+
+
+
+```{r unir-canton-a-datos, message=FALSE, warning=FALSE}
+datos_policia <-
+  datos_policia %>%
+  left_join(
+    dplyr::select(
+      st_drop_geometry(cantones),
+      cod_canton,
+      canton_normalizado
+    ),
+    by = "canton_normalizado",
+    copy = FALSE,
+    keep = FALSE
+  )
+```
+
+```{r contar-registros, message=FALSE, warning=FALSE}
+delitos_x_canton <-
+  datos_policia %>%
+  count(cod_canton, name = "datos_policia")
+
+
+cantones_delitos <-
+  cantones %>%
+  left_join(
+    delitos_x_canton,
+    by = "cod_canton",
+    copy = FALSE,
+    keep = FALSE
+  )
+
+
+
+```
+
+
+```{r paleta-color, message=FALSE}
+colores_cantones_delitos <-
+  colorNumeric(palette = "Reds",
+               domain = cantones_delitos$datos_policia,
+               na.color = "transparent")
+```
+
 
 
 # Generales
@@ -52,27 +178,52 @@ Row {data-height=850}
 ### Mapa
 
 
-```{r mapa}
+```{r mapa, message=FALSE, warning=FALSE}
 # Mapa
 leaflet() %>%
   setView(lng = -84.19452,
           lat = 9.572735,
           zoom = 7) %>%
   addTiles(group = "OpenStreetMap") %>%
+  addProviderTiles(provider = providers$Esri.WorldImagery, group = "ESRI World Imagery") %>%
+  addProviderTiles(provider = providers$Stamen.TonerLite, group = "Stamen Toner Lite") %>%
   addPolygons(
-    data = cantones,
+    data = cantones_delitos,
+    fillColor = ~ colores_cantones_delitos(cantones_delitos$datos_policia),
+    fillOpacity = 0.8,
     color = "black",
-    opacity = 0.2,
-    weight = 1.5,
+    stroke = TRUE,
+    weight = 1.0,
     popup = paste(
-      paste("<a>Cantón:</a>", cantones$canton),
-      paste("<a>Área:</a>", cantones$area, "km2"),
-      sep = "<br>"
+      # ventana emergente
+      paste(
+        "<strong>Cantón:</strong>",
+        cantones_delitos$canton
+      ),
+      paste(
+        "<strong>Delitos:</strong>",
+        cantones_delitos$datos_policia
+      ),
+      sep = '<br/>'
     ),
-    group = "Cantones"
+    group = "Delitos en cantones"
   ) %>%
-  addLayersControl(baseGroups = c("OpenStreetMap"),
-                   overlayGroups = c("Cantones"))
+  addLayersControl(baseGroups = c("OpenStreetMap","ESRI World Imagery", "Stamen Toner Lite"),
+                   overlayGroups = c("Delitos en cantones"))%>%
+  addLegend(
+    # leyenda
+    position = "bottomleft",
+    pal = colores_cantones_delitos,
+    values = cantones_delitos$datos_policia,
+    group = "Delitos",
+    title = "Cantidad de delitos"
+  ) %>%
+    addResetMapButton() %>%
+  addSearchOSM() %>%
+  addMouseCoordinates()%>%
+  addScaleBar(position = "bottomright", options = scaleBarOptions(imperial = FALSE)) %>%
+  addMiniMap(position = "bottomright")
+
 ```
 
 
@@ -110,7 +261,7 @@ Column {data-width=600}
 
 ### Grafico 1
 
-```{r grafico}
+```{r grafico, message=FALSE, warning=FALSE}
 grafico <-
 datos_policia %>%
   count(Delito) %>%
@@ -199,4 +350,17 @@ ggplotly(datos_genero)
 
 
 ### Grafico 4
+
+```{r prueba-mapa}
+tablaa=summarise(group_by(datos_policia, Victima),
+                n=n())
+tipo_vic <- 
+  ggplot(tablaa,aes(y=reorder(Victima,+n), x=n)) +
+  geom_bar(stat = "identity", fill=c("black")) +
+  ylab("Tipo de víctima") +
+  xlab("Cantidad de delitos") +
+  theme_classic()
+ggplotly(tipo_vic) %>% config(locale = 'es')
+```
+
 
