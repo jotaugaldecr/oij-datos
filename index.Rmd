@@ -20,6 +20,7 @@ library(leaflet)
 library(DT)
 library(ggplot2)
 library(plotly)
+library(lubridate)
 ```
 
 
@@ -109,12 +110,93 @@ Column {data-width=600}
 
 ### Grafico 1
 
+```{r grafico}
+grafico <-
+datos_policia %>%
+  count(Delito) %>%
+  ggplot(aes(x = reorder(Delito, n), y = n)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  ggtitle("Registro de Delitos") + 
+  xlab("Delito") +
+  ylab("Cantidad") +
+  theme_get()
+
+
+
+ggplotly(grafico) %>% config(locale = 'es')
+
+```
+
+
+
+
+
+
+
+
 ### Grafico 2
+
+```{r, asignacion de meses, message=FALSE}
+datos_meses <- datos_policia %>% mutate(fecha_meses = lubridate::month(Fecha))
+orden_meses <-c("Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre")
+
+```
+
+
+
+
+```{r, grafico delitos por mes, message=FALSE}
+
+delitos_meses <-
+  
+  datos_meses %>%
+  count(fecha_meses) %>%
+  ggplot(level = level_order, (aes(x = reorder(orden_meses, fecha_meses), y = n))) +
+  geom_bar(stat = "identity") +
+  ggtitle("Cantidad de Delitos por mes") +
+  xlab("Mes") +
+  ylab("Cantidad") +
+  coord_flip() + 
+  theme_dark()
+
+ggplotly(delitos_meses)
+
+```
+
+
+
+
+
+
+
+
+
 
 Column {data-width=400}
 -----------------------------------------------------------------------
 
 ### Grafico 3
+
+```{r, dato de delitos por genero, message=FALSE}
+
+datos_genero <-
+  datos_policia %>%
+  ggplot(aes(x = Delito, fill = Genero)) +
+  geom_bar(position = "fill") +
+  ggtitle("Proporcion por género") +
+  xlab("Proporción") +
+  ylab("Género") +
+  coord_flip() +
+  labs(fill = "Género") +
+  theme_classic()
+
+ggplotly(datos_genero)
+
+
+```
+
+
 
 ### Grafico 4
 
